@@ -15,7 +15,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ntx-django
-  TF_DIR: infra/do-droplet
+  TF_DIR: infra/
 
 jobs:
   deploy:

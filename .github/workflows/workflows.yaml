@@ -23,10 +23,13 @@ jobs:
     env:
       REGISTRY: ghcr.io
       OWNER: ${{ github.repository_owner }}
-      SHA7: ${{ github.sha.substr(0,7) }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # Get short SHA
+      - name: Set short SHA
+        run: echo "SHA7=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       # Run checkers
       - name: Install uv

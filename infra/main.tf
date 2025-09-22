@@ -52,34 +52,64 @@ resource "digitalocean_firewall" "fw" {
   name = "${var.droplet_name}-fw"
   droplet_ids = [digitalocean_droplet.app.id]
 
-  inbound_rule {
+  inbound_rule { # SSH from admin CIDRs
     protocol         = "tcp"
     port_range       = "22"
-    source_addresses = var.admin_cidrs # e.g., ["0.0.0.0/0"] to start, tighten later
+    source_addresses = var.admin_cidrs
+  }
+  inbound_rule { # HTTP and HTTPS from anywhere
+    protocol = "tcp"
+    port_range = "80"
+    source_addresses = ["0.0.0.0/0"]
+  }
+  inbound_rule { # HTTPS from anywhere
+    protocol = "tcp"
+    port_range = "443"
+    source_addresses = ["0.0.0.0/0"]
   }
 
-  inbound_rule { protocol = "tcp"; port_range = "80";  source_addresses = ["0.0.0.0/0"] }
-  inbound_rule { protocol = "tcp"; port_range = "443"; source_addresses = ["0.0.0.0/0"] }
-
-  outbound_rule { protocol = "tcp"; port_range = "1-65535"; destination_addresses = ["0.0.0.0/0"] }
-  outbound_rule { protocol = "udp"; port_range = "1-65535"; destination_addresses = ["0.0.0.0/0"] }
-  outbound_rule { protocol = "icmp"; destination_addresses = ["0.0.0.0/0"] }
+  outbound_rule { # All outbound
+    protocol = "tcp"
+    port_range = "1-65535"
+    destination_addresses = ["0.0.0.0/0"]
+  }
+  outbound_rule { # All outbound
+    protocol = "udp"
+    port_range = "1-65535"
+    destination_addresses = ["0.0.0.0/0"]
+  }
+  outbound_rule { # All outbound
+    protocol = "icmp"
+    destination_addresses = ["0.0.0.0/0"]
+  }
 }
 
 # Domains and DNS records
-resource "digitalocean_domain" "domain" { name = var.domain }
+resource "digitalocean_domain" "domain" { 
+  name = var.domain 
+}
+
+resource "digitalocean_record" "www_cname" {
+  domain = digitalocean_domain.domain.name
+  type   = "CNAME"
+  name   = "www"
+  value  = "@"
+}
+
 resource "digitalocean_record" "root_a" {
   domain = digitalocean_domain.domain.name
   type   = "A"
   name   = "@"
   value  = digitalocean_droplet.app.ipv4_address
 }
+
 resource "digitalocean_record" "grafana" {
   domain = digitalocean_domain.domain.name
   type   = "A"
   name   = "grafana"
   value  = digitalocean_droplet.app.ipv4_address
 }
+
 resource "digitalocean_record" "prometheus" {
   domain = digitalocean_domain.domain.name
   type   = "A"

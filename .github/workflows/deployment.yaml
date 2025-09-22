@@ -1,4 +1,4 @@
-name: manual-deployment
+name: Deployment
 
 on:
   workflow_dispatch:
@@ -14,12 +14,12 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: django
+  IMAGE_NAME: ntx-django
   TF_DIR: infra/do-droplet
 
 jobs:
   deploy:
-    name: Manual Deployment
+    name: Auto Deployment
     runs-on: ubuntu-24.04
 
     concurrency:

@@ -22,6 +22,7 @@ jobs:
     env:
       REGISTRY: ghcr.io
       OWNER: ${{ github.repository_owner }}
+      IMAGE_NAME: ntx-django
 
     steps:
 

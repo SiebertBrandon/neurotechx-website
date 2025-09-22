@@ -1,0 +1,68 @@
+name: ci-cd
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+      SHA7: ${{ github.sha.substr(0,7) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push Django
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/django:${{ env.SHA7 }}
+            ghcr.io/${{ env.OWNER }}/django:latest
+
+      - name: Build & push Web
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/web:${{ env.SHA7 }}
+            ghcr.io/${{ env.OWNER }}/web:latest
+
+      - name: Sync ops files to server
+        uses: easingthemes/ssh-deploy@v5
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.SERVER_IP }}
+          REMOTE_USER: ubuntu
+          SOURCE: "ops/"
+          TARGET: "/opt/stack/"
+
+      - name: Update APP_TAG and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /opt/stack/compose
+            # ensure .env exists on server with your hosts/secrets
+            sed -i "s/^APP_TAG=.*/APP_TAG=${{ env.SHA7 }}/" .env
+            docker compose pull
+            docker compose up -d
+            docker system prune -f
+            docker image prune -f
+            docker volume prune -f

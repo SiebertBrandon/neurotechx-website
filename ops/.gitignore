@@ -1,0 +1,19 @@
+# Ignore environment variable files
+.env
+.env.*
+.env*
+
+# Ignore temporary files
+*.tmp
+*.temp
+*~
+
+# OS-specific temp files
+.DS_Store
+Thumbs.db
+
+# Editor swap/backup files
+*.swp
+*.swo
+*.bak
+*.orig

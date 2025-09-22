@@ -1,14 +1,24 @@
-# Build stage
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+FROM python:3.12-slim
 
-# Serve stage
-FROM nginx:1.27-alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-# If SPA routing:
-RUN sed -i 's@try_files .*;@try_files $uri /index.html;@' /etc/nginx/conf.d/default.conf
-EXPOSE 80
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+
+# OS deps
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Use uv inside the image too (fast, reproducible)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    ln -s $HOME/.local/bin/uv /usr/local/bin/uv
+
+# Copy project & install deps
+COPY pyproject.toml ./
+RUN uv sync --frozen --no-dev
+COPY . .
+
+# Collect static & migrate at container start (idempotent)
+CMD sh -c '\
+  python manage.py migrate --noinput && \
+  python manage.py collectstatic --noinput && \
+  gunicorn neurotech_site.wsgi:application --bind 0.0.0.0:8000 --workers 2'
+EXPOSE 8000

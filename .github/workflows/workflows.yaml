@@ -44,11 +44,11 @@ jobs:
           restore-keys: ${{ runner.os }}-uv-
       
       - name: Sync dev dependencies
-        working-directory: ./neurotechx-website
+        working-directory: ./web
         run: uv sync --dev
 
       - name: Ruff check
-        working-directory: ./app
+        working-directory: ./web
         run: uv run ruff check
       
       # Deploy image
@@ -62,7 +62,7 @@ jobs:
       - name: Build & push image
         uses: docker/build-push-action@v6
         with:
-          context: ./neurotechx-website
+          context: ./web
           push: true
           tags: |
             ghcr.io/${{ env.OWNER }}/django:${{ env.SHA7 }}

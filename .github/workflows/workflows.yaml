@@ -1,0 +1,105 @@
+name: CI and Deploy
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy (e.g., SHA7 or 'latest')"
+        required: true
+        default: latest
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+      SHA7: ${{ github.sha.substr(0,7) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Run checkers
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      
+      - name: Cache already-installed packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            **/.venv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
+          restore-keys: ${{ runner.os }}-uv-
+      
+      - name: Sync dev dependencies
+        working-directory: ./neurotechx-website
+        run: uv sync --dev
+
+      - name: Ruff check
+        working-directory: ./app
+        run: uv run ruff check
+      
+      # Deploy image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./neurotechx-website
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/django:${{ env.SHA7 }}
+            ghcr.io/${{ env.OWNER }}/django:latest
+
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: [ci]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Choose tag (input or 'latest')
+        id: pick
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="latest"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Sync ops files to server
+        uses: easingthemes/ssh-deploy@v5
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.SERVER_IP }}
+          REMOTE_USER: ubuntu
+          SOURCE: "ops/"
+          TARGET: "/opt/stack/"
+
+      - name: Deploy ${{ steps.pick.outputs.tag }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/stack/compose
+            sed -i "s/^APP_TAG=.*/APP_TAG=${{ steps.pick.outputs.tag }}/" .env
+            docker compose pull
+            docker compose up -d
+            docker system prune -f

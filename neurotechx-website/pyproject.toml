@@ -4,6 +4,17 @@ version = "0.1.0"
 description = "Website and API services for NeurotechX"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
+dependencies = []
+
+[tool.ruff.format]
+# Enable Black-style formatting
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+docstring-code-format = true
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
     "ruff>=0.13.1",
 ]

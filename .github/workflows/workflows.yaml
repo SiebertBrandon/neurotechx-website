@@ -77,6 +77,10 @@ jobs:
         with:
           context: ./web
           push: true
+          pull: true
+          no-cache: true
+          build-args: |
+            BUILD_GIT_SHA=${{ github.sha }}
           tags: |
             ghcr.io/${{ env.OWNER_LC }}/django:${{ env.SHA7 }}
             ghcr.io/${{ env.OWNER_LC }}/django:latest

@@ -13,6 +13,9 @@ curl \
 ca-certificates \
 && rm -rf /var/lib/apt/lists/*
 
+ARG BUILD_GIT_SHA=unknown
+LABEL neurotechx_site.build_sha=$BUILD_GIT_SHA
+
 # Use uv inside the image too (fast, reproducible)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -y \
  && ln -s $HOME/.local/bin/uv /usr/local/bin/uv

@@ -24,4 +24,3 @@ COPY . .
 
 # Collect static & migrate at container start
 CMD ["bash", "-lc", "python manage.py migrate --noinput & python manage.py collectstatic --noinput && gunicorn neurotech_site.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
-

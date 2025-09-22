@@ -7,8 +7,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, False),
     SECRET_KEY=(str, "dev-insecure"),
-    ALLOWED_HOSTS=(list[str], ["*"]),
-    ADMIN_EMAILS=(list[str], []),  # comma-separated emails become admin/staff
 )
 
 # Load .env if present
@@ -16,8 +14,12 @@ environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
 DEBUG = env("DEBUG")
 SECRET_KEY = env("SECRET_KEY")
-ALLOWED_HOSTS = env("ALLOWED_HOSTS")
-ADMIN_EMAILS = [e.strip().lower() for e in env("ADMIN_EMAILS")]
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS",
+    default=["localhost", "127.0.0.1", "0.0.0.0", "[::1]"],
+)
+ADMIN_EMAILS = [e.strip().lower() for e in env.list("ADMIN_EMAILS", default=[])]
+ADMIN_EMAILS_SET = set(ADMIN_EMAILS)
 
 # Security / proxy
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -31,7 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
-    "core",
+    "neurotechx_site.core",
 ]
 
 MIDDLEWARE = [
@@ -53,7 +55,7 @@ WSGI_APPLICATION = "neurotechx_site.wsgi.application"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "core" / "templates"],
+        "DIRS": [BASE_DIR / "neurotechx_site" / "core" / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -91,7 +93,10 @@ STORAGES = {
 }
 
 # CSRF / Cookies (tune for your domain)
-CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS if h != "*"]
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=["http://localhost:8000", "http://127.0.0.1:8000"],
+)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 

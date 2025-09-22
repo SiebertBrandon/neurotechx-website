@@ -1,4 +1,29 @@
 services:
+  
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    environment:
+      OAUTH2_PROXY_PROVIDER: google           # or: oidc, github, google, etc.
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH_COOKIE_SECRET}   # 32B base64 (e.g., `openssl rand -base64 32`)
+      OAUTH2_PROXY_EMAIL_DOMAINS: "neurotechx.xyz"       # restrict if desired
+      OAUTH2_PROXY_REDIRECT_URL: https://${API_HOST}/oauth2/callback
+      OAUTH2_PROXY_SCOPE: "openid email profile"
+      OAUTH2_PROXY_PASS_ACCESS_TOKEN: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"  # sets X-Auth-Request-* headers
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_DOMAINS: ".neurotechx.xyz"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ".neurotechx.xyz"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.oauth2.rule=Host(`${API_HOST}`) && PathPrefix(`/oauth2/`)
+      - traefik.http.routers.oauth2.entrypoints=websecure
+      - traefik.http.routers.oauth2.tls.certresolver=le
+    restart: unless-stopped
+
   traefik:
     image: traefik:v3.1
     command:
@@ -22,25 +47,19 @@ services:
       - traefik.http.routers.dashboard.service=api@internal
     restart: unless-stopped
 
-  web:
-    image: ghcr.io/${GITHUB_OWNER}/web:${APP_TAG}
-    depends_on: [traefik]
-    labels:
-      - traefik.http.routers.web.rule=Host(`${WEB_HOST}`)
-      - traefik.http.routers.web.entrypoints=websecure
-      - traefik.http.routers.web.tls.certresolver=le
-      - traefik.http.services.web.loadbalancer.server.port=80
-    restart: unless-stopped
-
   django:
     image: ghcr.io/${GITHUB_OWNER}/django:${APP_TAG}
     env_file: /opt/stack/django/.env
-    depends_on: [traefik]
     labels:
+      - traefik.enable=true
       - traefik.http.routers.api.rule=Host(`${API_HOST}`)
       - traefik.http.routers.api.entrypoints=websecure
       - traefik.http.routers.api.tls.certresolver=le
       - traefik.http.services.api.loadbalancer.server.port=8000
+      - traefik.http.middlewares.oauth2-forwardauth.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth
+      - traefik.http.middlewares.oauth2-forwardauth.forwardauth.trustForwardHeader=true
+      - traefik.http.middlewares.oauth2-forwardauth.forwardauth.authResponseHeaders=X-Auth-Request-User,X-Auth-Request-Email,Authorization
+      - traefik.http.routers.api.middlewares=oauth2-forwardauth@docker
     restart: unless-stopped
 
   # Use DO Managed PG if possible; otherwise:

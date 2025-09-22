@@ -8,3 +8,20 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Database files
+*.sqlite3
+*.db
+
+# Logs and reports
+*.log
+*.out
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.coverage
+nosetests.xml
+pytestdebug.log
+.ruff_cache/

@@ -31,15 +31,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      
       - name: Install dev tools
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          uv sync --dev
       
       - name: Run Linter
         working-directory: ./web
-        run: uv run ruff check
+        run: |
+          uv sync --dev
+          uv run ruff check
 
       # Login to GitHub Container Registry and build/push image
       

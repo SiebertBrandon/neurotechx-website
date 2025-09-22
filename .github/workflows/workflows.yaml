@@ -27,12 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show commit and Dockerfile the runner sees
-        run: |
-          echo "GITHUB_SHA=$GITHUB_SHA"
-          git rev-parse HEAD
-          echo "---- web/Dockerfile (first 120 lines) ----"
-          nl -ba web/Dockerfile | sed -n '1,120p'
+      # - name: Show commit and Dockerfile the runner sees
+      #   run: |
+      #     echo "GITHUB_SHA=$GITHUB_SHA"
+      #     git rev-parse HEAD
+      #     echo "---- web/Dockerfile (first 120 lines) ----"
+      #     nl -ba web/Dockerfile | sed -n '1,120p'
 
       # Calculate short SHA and ensure lowercase owner
       - name: Initialize Build Variables

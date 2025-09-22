@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # OS deps
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Use uv inside the image too (fast, reproducible)

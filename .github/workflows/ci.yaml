@@ -1,0 +1,68 @@
+name: CI Tasks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-tasks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint and Build
+    runs-on: ubuntu-24.04
+
+    env:
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+
+    steps:
+
+      # Check out the repository on main branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dev tools
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          uv sync --dev
+      
+      - name: Run Linter
+        working-directory: ./web
+        run: uv run ruff check
+
+      # Login to GitHub Container Registry and build/push image
+      
+      - name: GHCR Login
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Calculate short SHA and ensure lowercase owner name
+      - name: Initialize Build Variables
+        run: |
+          echo "SHA7=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          push: true
+          build-args: |
+            BUILD_GIT_SHA=${{ github.sha }}
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/django:${{ env.SHA7 }}
+            ghcr.io/${{ env.OWNER_LC }}/django:latest

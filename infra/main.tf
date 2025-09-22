@@ -1,8 +1,17 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.6.0"
   required_providers {
-    digitalocean = { source = "digitalocean/digitalocean", version = "~> 2.39" }
+    digitalocean = {
+      source  = "digitalocean/digitalocean"
+      version = "~> 2.40"
+    }
+    template = {
+      source  = "hashicorp/template"
+      version = "~> 2.2"
+    }
   }
+
+  backend "s3" {}
 }
 
 provider "digitalocean" {
@@ -10,8 +19,20 @@ provider "digitalocean" {
 }
 
 # SSH key already uploaded to DO (or create with resource "digitalocean_ssh_key")
-data "digitalocean_ssh_key" "me" {
+data "digitalocean_ssh_key" "deploy_key" {
   name = var.ssh_key_name
+}
+
+data "template_file" "cloud_init" {
+  template = file("${path.module}/cloud-init.tftpl")
+  vars = {
+    docker_image = local.docker_image
+    ghcr_user    = var.ghcr_user
+    ghcr_token   = var.ghcr_token
+    app_port     = var.app_port
+    host_port    = var.host_port
+    env_lines    = join("\n", [for k, v in var.container_env : "Environment=${k}=${v}"])
+  }
 }
 
 resource "digitalocean_droplet" "app" {
@@ -20,13 +41,10 @@ resource "digitalocean_droplet" "app" {
   size   = var.size             # e.g., "s-1vcpu-1gb"
   image  = var.os_image        # e.g., "ubuntu-24-04-x64"
   backups = false
-
-  ssh_keys = [data.digitalocean_ssh_key.me.id]
-
-  user_data = file("${path.module}/cloudinit.yaml")
-
+  ssh_keys = [data.digitalocean_ssh_key.deploy_key.id]
+  user_data          = data.template_file.cloud_init.rendered
   monitoring = true
-
+  graceful_shutdown  = true
   tags = ["app", "docker"]
 }
 

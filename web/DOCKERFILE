@@ -1,0 +1,27 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# OS deps
+RUN apt-get update && \
+ && apt-get install -y --no-install-recommends \ 
+        build-essential \
+        curl \
+        ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# Use uv inside the image too (fast, reproducible)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -y \
+ && ln -s $HOME/.local/bin/uv /usr/local/bin/uv
+
+# Copy project & install deps
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+COPY . .
+
+# Collect static & migrate at container start
+CMD ["bash", "-lc", "python manage.py migrate --noinput & python manage.py collectstatic --noinput && gunicorn neurotech_site.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
+

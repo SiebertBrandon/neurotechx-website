@@ -68,3 +68,8 @@ variable "container_env" {
   default     = {}
   description = "Environment variables for the container"
 }
+
+variable "app_image" {
+  description = "Full image ref to deploy (e.g. ghcr.io/owner/django:latest or :<sha7>)"
+  type        = string
+}

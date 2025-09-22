@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
-    name: Lint and Build
+  lint-build-push:
+    name: Lint, Build, Push
     runs-on: ubuntu-24.04
 
     env:
@@ -28,9 +28,6 @@ jobs:
       # Check out the repository on main branch
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
       
       - name: Install dev tools
         run: |
@@ -66,5 +63,5 @@ jobs:
           build-args: |
             BUILD_GIT_SHA=${{ github.sha }}
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/django:${{ env.SHA7 }}
-            ghcr.io/${{ env.OWNER_LC }}/django:latest
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.IMAGE_NAME }}:${{ env.SHA7 }}
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.IMAGE_NAME }}:latest

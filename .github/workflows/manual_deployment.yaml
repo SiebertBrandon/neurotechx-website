@@ -1,102 +1,81 @@
-name: Deploy Production
+name: manual-deployment
 
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Git ref to deploy (tag like v1.2.3 or commit SHA). Leave blank for latest tag."
+      image_tag:
+        description: "Short SHA tag to deploy (leave blank to use 'latest')"
         required: false
-        type: string
+        default: ""
 
 permissions:
   contents: read
   packages: read
 
-concurrency:
-  group: deploy
-  cancel-in-progress: false
-
 env:
   REGISTRY: ghcr.io
-  OWNER: ${{ github.repository_owner }}
+  IMAGE_NAME: django
+  TF_DIR: infra/do-droplet
 
 jobs:
   deploy:
+    name: Manual Deployment
     runs-on: ubuntu-24.04
 
+    concurrency:
+      group: manual-deploy
+      cancel-in-progress: false
+
     steps:
-      - name: Checkout (fetch tags)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Choose ref
-        id: pick
-        shell: bash
+      - name: Compute vars
+        id: vars
         run: |
-          set -euo pipefail
-          if [[ -n "${{ inputs.ref || '' }}" ]]; then
-            REF="${{ inputs.ref }}"
+          echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          # Fallback to 'latest' when input is blank
+          if [ -z "${{ github.event.inputs.image_tag }}" ]; then
+            echo "IMAGE_TAG=latest" >> "$GITHUB_ENV"
           else
-            LATEST_TAG="$(git describe --tags "$(git rev-list --tags --max-count=1)" 2>/dev/null || true)"
-            if [[ -z "${LATEST_TAG}" ]]; then
-              echo "No tags found. Provide a tag or commit SHA in the dispatch form." >&2
-              exit 1
-            fi
-            REF="${LATEST_TAG}"
+            echo "IMAGE_TAG=${{ github.event.inputs.image_tag }}" >> "$GITHUB_ENV"
           fi
+          echo "IMAGE_REF=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_tag || '' }}" >> "$GITHUB_ENV"
 
-          COMMIT="$(git rev-parse "${REF}^{commit}")"
-          SHA7="${COMMIT:0:7}"
-
-          OWNER_LC="$(echo '${{ env.OWNER }}' | tr '[:upper:]' '[:lower:]')"
-          IMAGE_SHA="${{ env.REGISTRY }}/${OWNER_LC}/django:${SHA7}"
-          IMAGE_LATEST="${{ env.REGISTRY }}/${OWNER_LC}/django:latest"
-
-          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
-          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
-          echo "sha7=${SHA7}" >> "$GITHUB_OUTPUT"
-          echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
-          echo "image_sha=${IMAGE_SHA}" >> "$GITHUB_OUTPUT"
-          echo "image_latest=${IMAGE_LATEST}" >> "$GITHUB_OUTPUT"
-
-      - name: Login to GHCR (to check existence)
+      - name: Login to GHCR (read)
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ env.OWNER }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pick image tag (prefer SHA, else latest)
-        id: image
-        shell: bash
+      - name: Verify image tag exists
         run: |
           set -euo pipefail
-          if docker buildx imagetools inspect "${{ steps.pick.outputs.image_sha }}" > /dev/null 2>&1; then
-            echo "image=${{ steps.pick.outputs.image_sha }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "WARN: SHA image not found; falling back to :latest"
-            echo "image=${{ steps.pick.outputs.image_latest }}" >> "$GITHUB_OUTPUT"
+          IMAGE_TAG="${IMAGE_TAG:-latest}"
+          IMAGE="ghcr.io/${OWNER_LC}/${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "Checking image: ${IMAGE}"
+          if ! docker manifest inspect "${IMAGE}" > /dev/null 2>&1; then
+            echo "::error::Image not found in GHCR: ${IMAGE}"
+            exit 1
           fi
-          echo "Chosen image: $(cat $GITHUB_OUTPUT | sed -n 's/^image=//p')"
+          echo "TF_APP_IMAGE=${IMAGE}" >> "$GITHUB_ENV"
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_wrapper: false
+          terraform_version: 1.9.8
 
-      - name: Terraform Init (Spaces backend)
-        working-directory: infra/do-droplet
+      - name: Terraform Init (DigitalOcean Spaces backend)
+        working-directory: ${{ env.TF_DIR }}
         env:
-          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          SPACES_KEY:      ${{ secrets.SPACES_KEY }}
-          SPACES_SECRET:   ${{ secrets.SPACES_SECRET }}
-          SPACES_BUCKET:   ${{ secrets.SPACES_BUCKET }}
-          SPACES_REGION:   ${{ secrets.SPACES_REGION }}
+          SPACES_KEY:    ${{ secrets.SPACES_KEY }}
+          SPACES_SECRET: ${{ secrets.SPACES_SECRET }}
+          SPACES_BUCKET: ${{ secrets.SPACES_BUCKET }}
+          SPACES_REGION: ${{ secrets.SPACES_REGION }}
         run: |
           set -euo pipefail
           ENDPOINT="https://${SPACES_REGION}.digitaloceanspaces.com"
-
           terraform init \
             -backend-config="endpoint=${ENDPOINT}" \
             -backend-config="access_key=${SPACES_KEY}" \
@@ -109,34 +88,16 @@ jobs:
             -backend-config="skip_region_validation=true" \
             -backend-config="skip_requesting_account_id=true"
 
-      - name: Terraform Apply
-        working-directory: infra/do-droplet
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_DIR }}
         env:
-          TF_VAR_do_token:    ${{ secrets.DIGITALOCEAN_TOKEN }}
-          TF_VAR_ghcr_user:   ${{ secrets.GHCR_USERNAME }}   # leave unset if public
-          TF_VAR_ghcr_token:  ${{ secrets.GHCR_READ_TOKEN }} # PAT with read:packages; leave unset if public
-        run: |
-          set -euo pipefail
+          TF_VAR_do_token:   ${{ secrets.DIGITALOCEAN_TOKEN }}
+          TF_VAR_app_image:  ${{ env.TF_APP_IMAGE }}
+        run: terraform plan -input=false
 
-          # Define your deploy settings here (or move to a tfvars file)
-          terraform apply -auto-approve \
-            -var "ssh_key_name=${{ secrets.DO_SSH_KEY_NAME }}" \
-            -var "name=django-app" \
-            -var "region=nyc3" \
-            -var "size=s-1vcpu-1gb" \
-            -var "image_slug=ubuntu-24-04-x64" \
-            -var "image=${{ steps.image.outputs.image }}" \
-            -var 'container_env={
-              DJANGO_SETTINGS_MODULE="config.settings"
-              PYTHONUNBUFFERED="1"
-              PORT="8000"
-              # Add your real env here; consider using DO Secrets Manager + fetch at runtime
-            }'
-
-      - name: Show droplet IP
-        id: out
-        working-directory: infra/do-droplet
-        run: |
-          IP="$(terraform output -raw droplet_ip)"
-          echo "ip=${IP}" >> "$GITHUB_OUTPUT"
-          echo "Droplet public IP: ${IP}"
+      - name: Terraform Apply (auto-approve)
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          TF_VAR_do_token:   ${{ secrets.DIGITALOCEAN_TOKEN }}
+          TF_VAR_app_image:  ${{ env.TF_APP_IMAGE }}
+        run: terraform apply -input=false -auto-approve

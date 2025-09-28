@@ -10,7 +10,6 @@ terraform {
       version = "~> 2.2"
     }
   }
-
   backend "s3" {}
 }
 
@@ -18,7 +17,13 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# SSH key already uploaded to DO (or create with resource "digitalocean_ssh_key")
+locals {
+  docker_image = var.app_image
+  # Load env vars from files
+  envs = { for tuple in regexall("(.*)=(.*)", file(".infra.env")) : tuple[0] => tuple[1] }
+  creds = { for tuple in regexall("(.*)=(.*)", file(".infra.creds.env")) : tuple[0] => sensitive(tuple[1]) }
+}
+
 data "digitalocean_ssh_key" "deploy_key" {
   name = var.ssh_key_name
 }
@@ -37,12 +42,12 @@ data "template_file" "cloud_init" {
 
 resource "digitalocean_droplet" "app" {
   name   = var.droplet_name
-  region = var.region           # e.g., "nyc3"
-  size   = var.size             # e.g., "s-1vcpu-1gb"
-  image  = var.os_image        # e.g., "ubuntu-24-04-x64"
-  backups = false
-  ssh_keys = [data.digitalocean_ssh_key.deploy_key.id]
-  user_data          = data.template_file.cloud_init.rendered
+  region = var.region
+  size   = var.size
+  image  = var.os_image
+  backups = var.enable_backups
+  ssh_keys = [for k in data.digitalocean_ssh_keys.team.keys : k.id]
+  user_data = data.template_file.cloud_init.rendered
   monitoring = true
   graceful_shutdown  = true
   tags = ["app", "docker"]
@@ -84,35 +89,3 @@ resource "digitalocean_firewall" "fw" {
   }
 }
 
-# Domains and DNS records
-resource "digitalocean_domain" "domain" { 
-  name = var.domain 
-}
-
-resource "digitalocean_record" "www_cname" {
-  domain = digitalocean_domain.domain.name
-  type   = "CNAME"
-  name   = "www"
-  value  = "@"
-}
-
-resource "digitalocean_record" "root_a" {
-  domain = digitalocean_domain.domain.name
-  type   = "A"
-  name   = "@"
-  value  = digitalocean_droplet.app.ipv4_address
-}
-
-resource "digitalocean_record" "grafana" {
-  domain = digitalocean_domain.domain.name
-  type   = "A"
-  name   = "grafana"
-  value  = digitalocean_droplet.app.ipv4_address
-}
-
-resource "digitalocean_record" "prometheus" {
-  domain = digitalocean_domain.domain.name
-  type   = "A"
-  name   = "prometheus"
-  value  = digitalocean_droplet.app.ipv4_address
-}

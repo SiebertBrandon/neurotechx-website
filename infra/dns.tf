@@ -4,7 +4,13 @@ resource "digitalocean_domain" "root" {
   ip_address = digitalocean_droplet.app.ipv4_address
 }
 
-# Root A -> droplet
+resource "digitalocean_record" "www_cname" {
+  domain = digitalocean_domain.domain.name
+  type   = "CNAME"
+  name   = "www"
+  value  = "@"
+}
+
 resource "digitalocean_record" "root_a" {
   domain = digitalocean_domain.root.name
   type   = "A"
@@ -13,7 +19,6 @@ resource "digitalocean_record" "root_a" {
   ttl    = 300
 }
 
-# Optional AAAA if you enable IPv6 on the Droplet in Terraform (size/region must support it)
 resource "digitalocean_record" "root_aaaa" {
   domain = digitalocean_domain.root.name
   type   = "AAAA"
@@ -22,7 +27,6 @@ resource "digitalocean_record" "root_aaaa" {
   ttl    = 300
 }
 
-# CNAMEs -> root
 locals {
   cname_hosts = ["www", "api", "grafana", "prometheus", "traefik"]
 }

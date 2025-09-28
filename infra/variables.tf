@@ -1,7 +1,6 @@
-variable "do_token" {
+variable "app_image" {
   type        = string
-  sensitive   = true
-  description = "DigitalOcean API token"
+  description = "Full image ref to deploy (e.g. ghcr.io/owner/ntx-django:latest or :<sha7>)"
 }
 
 variable "ssh_key_name" {
@@ -15,19 +14,22 @@ variable "name" {
   description = "Droplet name"
 }
 
+variable "domain_name" {
+  type        = string
+  description = "Root domain hosted in DigitalOcean (e.g., example.com)"
+  default     = "" # empty means DNS disabled
+}
+
 variable "region" {
   type        = string
-  default     = "nyc3"
 }
 
 variable "size" {
   type        = string
-  default     = "s-1vcpu-1gb"
 }
 
 variable "image_slug" {
   type        = string
-  default     = "ubuntu-24-04-x64"
   description = "Base OS"
 }
 
@@ -67,9 +69,4 @@ variable "container_env" {
   type        = map(string)
   default     = {}
   description = "Environment variables for the container"
-}
-
-variable "app_image" {
-  description = "Full image ref to deploy (e.g. ghcr.io/owner/django:latest or :<sha7>)"
-  type        = string
 }

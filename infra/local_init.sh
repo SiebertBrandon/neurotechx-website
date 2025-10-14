@@ -1,4 +1,2 @@
-export AWS_ACCESS_KEY_ID="DO8013Y4R3WZU8X3B9KR"
-export AWS_SECRET_ACCESS_KEY="dth3izf3WBYUYZsD0Eu8S+LGeH28ahN89YkDXQ/qh9Y"
-
+set -a && source local.creds.env && set +a
 terraform init -backend-config=backend.hcl -reconfigure

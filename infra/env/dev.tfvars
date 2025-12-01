@@ -1,21 +1,21 @@
 environment         = "dev"
-project_name        = "my-platform"
-region              = "nyc3"
+project_name        = "ntx-web-platform-dev"
+region              = "nyc"
 
-cluster_name        = "my-platform-dev"
+cluster_name        = "ntx-web-platform-dev"
 cluster_node_size   = "s-2vcpu-4gb"
-cluster_node_count  = 2
+cluster_node_count  = 1
 
 vpc_cidr            = "10.10.0.0/16"
 
-domain_root         = "example.dev"
-domain_website      = "www.example.dev"
-domain_api          = "api.example.dev"
+domain_root         = "dev.neurotechx.xyz"
+domain_website      = "www.dev.neurotechx.xyz"
+domain_api          = "api.dev.neurotechx.xyz"
 
 postgres_size       = "db-s-1vcpu-1gb"
 redis_size          = "db-s-1vcpu-1gb"
 
 enable_github_runner = true
 
-github_org   = "my-org"
-github_repo  = "my-repo"
+github_org   = "SiebertBrandon"
+github_repo  = "neurotechx-website"
